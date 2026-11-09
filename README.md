@@ -17,6 +17,9 @@ Run everything from the repo root:
 ```sh
 python src/explore.py    # Stage 1: plain Python
 python src/analysis.py   # Stage 2: pandas
+python src/charts.py     # Stage 3: charts saved to charts/
+python src/features.py   # Stage 3: per-game features
+python tests/test_features.py  # leakage checks
 ```
 
 Type `deactivate` to leave the environment.

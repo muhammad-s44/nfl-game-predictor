@@ -217,3 +217,88 @@ Same logic as Stage 1, but each count is a comparison followed by `.sum()`. We w
 - Assuming the sportsbook sign convention and getting every favorite backwards. **Always check a sign convention against games whose answer you know.**
 - Counting a tie as an underdog win (`result <= 0`).
 - Ranking teams without a minimum sample size.
+
+---
+
+## Stage 3a: Charts (`src/charts.py`)
+
+**Goal:** turn the Stage 2 findings into pictures saved as PNG files in `charts/`.
+
+### How matplotlib works (the 30-second version)
+
+`fig, ax = plt.subplots()` gives you a **figure** (the whole image) and an **axes** (one plot area inside it). You draw on the axes (`ax.plot`, `ax.bar`, `ax.barh`), label it (`ax.set_title`, `ax.set_xlabel`), then `fig.savefig(...)`. `matplotlib.use("Agg")` tells matplotlib to draw straight to files instead of opening a window, so the script also works on a server.
+
+### The functions
+
+- **`style_axes`**: one shared style for every chart (left-aligned title, light grid behind the data, no top/right border lines). Putting style in one function keeps all four charts consistent and keeps the chart functions short.
+- **`save`**: saves at 150 dpi and then calls `plt.close(fig)`. Without `close`, every figure stays in memory. That's harmless with 4 charts and a real problem with 400.
+- **`last_full_season`**: the latest season with a Super Bowl. Charts only use complete seasons, so a half-played 2026 season (mostly early-season games) doesn't distort the trend.
+- **`chart_home_win_pct`**: line chart of home win % per season, with a dashed 50% line (no advantage) and 2020 annotated. **Story:** home edge has shrunk, and 2020's empty stadiums nearly erased it.
+- **`chart_scoring_trend`**: average combined points per game by season. **Story:** scoring rose from ~41 points (early 2000s) to a 49.5 peak in 2020, then settled around 44–46. Rule changes favoring offense are the usual explanation.
+- **`chart_underdog_wins`**: horizontal bars, because 35 team names fit better down the side than squeezed along the bottom. Sorted so the ranking is obvious, with the top 3 highlighted and the league average marked.
+- **`favorite_win_pct_by_spread` + `chart_favorite_by_spread`** (my extra chart): groups games by spread size with `pd.cut` (turns numbers into ranges) and shows how often the favorite wins. **Story:** a 1–3 point favorite wins only 55%, while a 13.5+ point favorite wins 90%. The spread is a very well-calibrated prediction, which is why Vegas is a tough benchmark in Stage 4.
+
+**Design choices worth defending:** one main color (blue) with one highlight color (orange) so color always means something; titles that state the finding ("Home teams win less often than they used to") instead of only naming the data; the y-axis of the home-win chart doesn't start at 0, because the interesting range is 48–64% and the dashed 50% line gives the reference point. Starting a **bar** chart's axis above 0 would be misleading (bar length *is* the value), so bar charts start at 0.
+
+**Beginner mistakes:** forgetting `os.makedirs(CHART_DIR, exist_ok=True)` (crash: folder doesn't exist); forgetting `plt.close`; plotting win % as 0.56 on an axis labeled "%"; using a different random color per bar (color that means nothing).
+
+---
+
+## Stage 3b: Features (`src/features.py`)
+
+**Goal:** for every game, compute numbers a model can learn from: recent scoring, recent defense, record so far, rest and whether it's a division game. **Every one must be known before kickoff.**
+
+### Data leakage, explained for a first-year
+
+Imagine studying for an exam with a practice test that has the answers printed on it. You'd score 100% on the practice test and then fail the real one. **Data leakage** is the same thing for a model: some feature secretly contains information about the answer, information you wouldn't have at prediction time.
+
+Example: a feature "points scored in the last 3 games" that *accidentally includes this game*. If the home team scored 45 today, their "last 3 average" jumps, and the model learns "high average → home team wins". It looks amazing in testing. But on a real Sunday morning you don't know today's score yet, so the model is useless.
+
+Leakage is dangerous because **nothing crashes**. You just get suspiciously good accuracy. The defence is a rule (*only use the past*) plus an automated test that proves you followed it.
+
+### `FRANCHISE`
+
+Maps old team codes to current ones (`STL`→`LA`, `SD`→`LAC`, `OAK`→`LV`). Without it, the Rams' first game in LA (2016) would look like a brand-new team with no history.
+
+### `team_game_rows(df)`: reshaping wide to long
+
+**What:** each game row becomes **two** rows, one per team, with `points_for` and `points_against` from that team's point of view.
+
+**Why:** a team is sometimes home and sometimes away. To ask "what did this team score in its last 3 games?", all of a team's games need to sit in one column we can sort by date. This reshape (often called **wide to long**) is the most important trick in the file.
+
+**Beginner mistake:** computing rolling stats on `home_score` grouped by `home_team`. That only looks at the team's *home* games, so "last 3 games" is really "last 3 home games", which is wrong and can reach back weeks.
+
+### `win_credit`
+
+1 for a win, 0.5 for a tie, 0 for a loss. This is how NFL standings count ties.
+
+### `add_team_history(rows)`: where leakage is prevented
+
+- **Sort by team, then date.** Rolling windows follow row order, so the order *must* be chronological. (`game_id` is a tie-breaker so the order is always the same.)
+- **`groupby("team")[col].transform(...)`**: runs a function separately for each team and returns a result *the same length as the input*, so it can be stored as a new column. (`agg` would collapse each team to one row.)
+- **`s.shift(1)`**: moves each value down one row. Row *n* now holds game *n-1*'s value, and the first game holds NaN. **This is the line that prevents leakage.** Remove it and each game's average includes its own score (the test catches exactly that).
+- **`.rolling(3, min_periods=1).mean()`**: average of up to 3 previous values. `min_periods=1` means a team with only 1–2 past games still gets an average instead of NaN. This rolls *across* seasons (week 1 uses last December's games). That's a choice; rosters change over the off-season, so another fair option is resetting each season.
+- **Season win % to date:** `cumsum()` gives the running total of win credit *including* this game, so we subtract this game's credit to get wins *before* it. `cumcount()` numbers rows 0, 1, 2… within each (team, season), which is exactly "games played before this one". Week 1 has 0 games played: dividing by 0 is undefined, so we use 0.5 ("average team, no information yet").
+
+### `build_features(df)`
+
+**What:** runs the steps above, then **merges** each team's stats back onto the game row twice: once as `home_*` and once as `away_*`. It adds:
+- `rest_diff = home_rest - away_rest`: rest days are known from the schedule, so they're safe.
+- `div_game`: also known from the schedule.
+- **Difference features** (`pf_last3_diff`, `pa_last3_diff`, `win_pct_diff`): "how much better is the home team at this?" One number per stat makes a simple model easier to fit and to interpret.
+
+`FEATURE_COLUMNS` lists exactly which columns a model may use. Keeping it in one place stops anyone from accidentally feeding `home_score` (the answer!) to the model.
+
+**Concepts:** `merge` (SQL-style join on `game_id` + team), `rename`, `pd.to_datetime` (real dates sort and compare correctly), `copy()`.
+
+**Beginner mistakes:** forgetting `shift(1)`; rolling without sorting by date; merging on `game_id` only (each game has two team rows, so you'd get duplicated rows); filling missing values with an average computed from *all* seasons, which is itself a small leak.
+
+### The leakage tests (`tests/test_features.py`)
+
+Run with `python tests/test_features.py`.
+
+1. **`test_future_results_do_not_change_features`: the key test.** Pick a cutoff date. Replace every score on or after it with random numbers. Rebuild the features. Every game on or before the cutoff must have **identical** features. If anything changed, a feature was reading the future (or its own score: games *on* the cutoff date get scrambled too). It also checks that later games *did* change, which proves the scramble actually ran. A test that can't fail is worthless.
+2. **`test_features_match_slow_recomputation`:** for 150 random games, recomputes the features the most obvious way possible (filter the team's games with `gameday < this game`, take the last 3) and checks they match the fast pandas version. This catches *correctness* bugs like wrong sorting or a broken merge.
+3. **`test_week_one_win_pct_is_neutral`:** every week 1 game has win % 0.5 for both teams.
+
+**I verified the test works:** with `shift(1)` deleted, test 1 fails immediately (`29.0 != 38.67`).
