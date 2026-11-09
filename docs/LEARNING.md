@@ -129,3 +129,91 @@ For each function you'll find:
 | Home win % | 56.4% | 53.5% |
 | Top scoring team | NE (12,515) | LA (599) |
 | Avg total points | 44.28 | 45.96 |
+
+---
+
+## Stage 2: pandas (`src/analysis.py`)
+
+**Goal:** redo Stage 1 in pandas, check that both versions agree, then answer two new questions: *has home-field advantage shrunk?* and *which teams win most as underdogs?*
+
+### Setting up: virtual environments and `requirements.txt`
+
+A **virtual environment** (`.venv/`) is a private folder of installed packages for one project. It means this project's pandas version can't break another project, and `requirements.txt` lets anyone recreate the same setup with `pip install -r requirements.txt`. Versions are pinned with `==` so the code runs the same on another machine. `.venv/` is in `.gitignore` because you commit the *recipe* (`requirements.txt`), never the installed packages.
+
+**Beginner mistakes:** forgetting to `source .venv/bin/activate` in a new terminal, which gives `ModuleNotFoundError: No module named 'pandas'`. Committing `.venv/` to git.
+
+### The core pandas idea: vectorized operations
+
+In Stage 1 we looped over games one at a time. In pandas you write an operation on a **whole column** and pandas runs the loop for you (in fast C code):
+
+```python
+df["home_score"] > df["away_score"]   # a Series of True/False, one per game
+(df["home_score"] > df["away_score"]).sum()   # True counts as 1, so this counts home wins
+```
+
+A **DataFrame** is a table. A **Series** is one column of it, with an **index** (row labels).
+
+### `load_games_df(path)`
+
+**What:** `pd.read_csv` then `dropna` on the score columns, then convert scores to int.
+
+**Why:** pandas reads blank cells as `NaN`. A column containing any `NaN` must be float (NaN is a float), which is why scores load as `17.0`. After the unplayed games are dropped we can safely `astype(int)`. Unlike `csv`, pandas already guessed that `season` and `week` are numbers.
+
+**Beginner mistakes:** calling `astype(int)` *before* `dropna`, which fails with "cannot convert NaN to integer". Forgetting that `dropna` returns a *new* DataFrame (you must assign it back).
+
+### `filter_season(df, season)`: boolean indexing
+
+`df[df["season"] == season]` is **boolean indexing**. The inner part is a True/False Series, and the outer `df[...]` keeps only the True rows. It's the pandas version of the list comprehension in Stage 1.
+
+### `count_home_wins`, `home_win_pct`, `average_total_points`
+
+Same logic as Stage 1, but each count is a comparison followed by `.sum()`. We wrap results in `int(...)` because pandas returns numpy integers. They print the same, but `{"home": np.int64(4144)} == {"home": 4144}` comparisons and JSON output are cleaner with plain ints.
+
+### `points_by_team(df)`: `groupby`
+
+**What:** `df.groupby("home_team")["home_score"].sum()` means "split the rows by home team, then sum home_score within each group". We do the same for away teams, then add the two Series together.
+
+**Why `add(..., fill_value=0)`?** Adding two Series lines them up by index (team name). If a team appeared only on one side, plain `+` would give `NaN` for it. `fill_value=0` treats the missing side as 0 points.
+
+**Concepts:** split-apply-combine (`groupby`), index alignment, `sort_values`.
+
+**Beginner mistake:** `home + away` without `fill_value`. That silently gives NaN for any team missing from one side. Index alignment is powerful but surprising.
+
+### `check_matches_stage1`
+
+**What:** asserts that the pandas answers equal the plain-Python answers.
+
+**Why:** two independent implementations agreeing is strong evidence both are right. Floats are compared with a tolerance (`< 1e-9`) instead of `==`, because the two versions may add numbers in a different order and get rounding differences in the last digit.
+
+### `home_win_pct_by_season(df)` and `compare_eras`
+
+**What:** home win % per season, then the average before 2015 vs 2015 onward.
+
+**Why the extra filters?**
+- **Neutral-site games are excluded** (`location != "Home"`). The "home" team in a Super Bowl or a neutral international game has no real home advantage, so including them blurs the answer. This is why the overall number here differs slightly from Stage 1, and you should be able to explain that difference.
+- **Ties are excluded**, same rule as Stage 1.
+- **Only complete seasons** (up to the last Super Bowl in the data). A half-played season is mostly early-season games and isn't comparable.
+
+**Concept:** `True/False` Series `.mean()` = fraction True. `groupby(...).mean()` gives that fraction per group.
+
+**Finding:** home teams won **57.7%** of decided games in 1999–2014 vs **55.1%** in 2015–2025. 2020 (empty stadiums during COVID) was 50.4%, almost a coin flip, which is a nice natural experiment showing crowds matter. 2019 and 2021 were low too, so it isn't only fans. Home-field advantage has shrunk, but it hasn't disappeared.
+
+### `add_underdog_columns`, `underdog_win_rates`, `overall_underdog_win_pct`
+
+**The sign of `spread_line` (checked, not assumed):** in nflverse, `spread_line` is the **home team's expected margin**. Positive means the home team is favored. That is the *opposite* of how sportsbooks print lines ("KC -3" means KC is favored). Evidence from our data:
+- Super Bowl LVI (LA @ CIN): `spread_line = -4.5`. The Rams, the away team, really were 4.5-point favorites, and CIN's moneyline was +160 (underdog).
+- Super Bowl LIX (KC @ PHI): `-1.5`, and KC (away) was the favorite, at -120 on the moneyline.
+- Across all games, `spread_line > 0` agrees with "the home moneyline is negative (home is the favorite)" 98% of the time, and `spread_line` correlates positively (+0.43) with `result` (home minus away).
+
+**What the functions do:**
+- `add_underdog_columns` drops pick'em games (`spread_line == 0`, no underdog), names the underdog, and marks whether they won. `Series.where(cond, other)` keeps a value where `cond` is True and takes `other` where it's False. It's a vectorized if/else.
+- `underdog_win_rates` groups by underdog and uses `.agg(games="count", wins="sum")` to compute two columns at once. Teams with fewer than 20 underdog games are dropped, because a 3-for-5 team would show 60% and top the list on pure luck. That's **small-sample noise**.
+
+**`.copy()`:** `add_underdog_columns` filters and then adds columns. Without `.copy()`, pandas may warn that you're modifying a *view* of the original data (`SettingWithCopyWarning`). Copying makes it clear we own a new DataFrame.
+
+**Finding:** underdogs win **33.4%** of games. Pittsburgh is the best underdog by far (49.7% over 167 games). Cleveland (24.8%) and Detroit (25.7%) are the worst.
+
+**Beginner mistakes:**
+- Assuming the sportsbook sign convention and getting every favorite backwards. **Always check a sign convention against games whose answer you know.**
+- Counting a tie as an underdog win (`result <= 0`).
+- Ranking teams without a minimum sample size.

@@ -1,0 +1,5 @@
+# Exact versions this project was tested with (Python 3.15).
+# Install inside a virtual environment: see README.md
+pandas==3.1.1
+scikit-learn==1.9.1
+matplotlib==3.11.2
