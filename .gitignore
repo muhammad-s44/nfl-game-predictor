@@ -218,3 +218,6 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Rebuild exercise attempts (docs/REBUILD.md)
+practice/

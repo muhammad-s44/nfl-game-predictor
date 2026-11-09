@@ -302,3 +302,81 @@ Run with `python tests/test_features.py`.
 3. **`test_week_one_win_pct_is_neutral`:** every week 1 game has win % 0.5 for both teams.
 
 **I verified the test works:** with `shift(1)` deleted, test 1 fails immediately (`29.0 != 38.67`).
+
+---
+
+## Stage 4: The model (`src/model.py`)
+
+**Goal:** predict whether the home team wins, and find out honestly whether that beats two simple strategies: *always pick the home team* and *pick whoever Vegas favors*.
+
+### Logistic regression, explained for a first-year
+
+We want a **probability** that the home team wins, between 0 and 1.
+
+1. **Score the matchup.** Multiply each feature by a weight and add them up, plus a constant:
+   `score = b + w1·pf_last3_diff + w2·win_pct_diff + ...`
+   This is the same as linear regression. The score can be any number, like -3.2 or +1.7.
+2. **Squash the score into a probability** with the **sigmoid** function: `p = 1 / (1 + e^(-score))`. A big positive score gives p near 1, a big negative score gives p near 0, and a score of 0 gives p = 0.5.
+3. **Predict** "home win" if p > 0.5.
+
+**Training** means finding the weights that make the predicted probabilities match what actually happened in the 2018–2024 games as closely as possible. scikit-learn does this for us in `fit()`.
+
+**Why logistic regression?** It's simple, fast, hard to overfit with 5 features, and **explainable**: each weight tells you which way a feature pushes the prediction and how hard. In an interview, a model you can explain beats a black box you can't.
+
+**What the score means:** it's the **log-odds** (`log(p / (1-p))`). A coefficient of +0.354 on `pf_last3_diff` means "one standard deviation more recent scoring than the opponent raises the log-odds of a home win by 0.354". In plain terms, that's the strongest of our features.
+
+### `prepare_games(features)`
+
+**What:** keeps regular-season games, drops ties, drops rows with missing features (only each team's first game since 1999), and adds the target `home_win` (1/0).
+
+**Why:** playoff games are excluded because the task was a regular-season model (and playoff matchups are a different kind of game: best teams only, some neutral sites). Ties are excluded because there's no correct winner to score.
+
+### `split_train_test(games)`: split by time, not randomly
+
+**What:** train on 2018–2024, test on 2025.
+
+**Why not a random 80/20 split?** In real life you predict *future* games from *past* ones. A random split would put some 2025 games into training and test on other 2025 games from the same weeks, which is a mild form of leakage (the model gets a peek at that season). A time-based split is the honest version.
+
+**Why start at 2018?** The game changes over time (scoring trends, rule changes, the home-field drop we saw in Stage 2). Recent seasons are more like the season we're predicting. 2018+ still gives ~1,850 training games.
+
+### `train_model(train)`
+
+`make_pipeline(StandardScaler(), LogisticRegression())` chains two steps:
+- **`StandardScaler`** rescales every feature to mean 0 and standard deviation 1. Our features have very different units (points vs win % vs days). scikit-learn's logistic regression applies **regularization** by default (a penalty on big weights, which prevents overfitting), and that penalty is only fair if features are on the same scale. Scaling also makes the coefficients comparable to each other.
+- **The pipeline** makes sure the scaler learns its mean/std from the **training data only** and then applies those same numbers to the test data. Scaling with statistics from the test set would be (small) leakage.
+
+**Why only difference features?** `pf_last3_diff` is exactly `home_pf_last3 - away_pf_last3`. Giving the model all three makes the inputs redundant (**multicollinearity**), so the weights could shift around arbitrarily and become meaningless to interpret.
+
+### `home_team_baseline` and `vegas_favorite_baseline`
+
+**A baseline is the simplest thing that could possibly work.** A model is only interesting if it beats it.
+- *Always home:* predicts 1 for every game.
+- *Vegas favorite:* `spread_line >= 0` → home. `spread_line > 0` means home is favored (sign checked in Stage 2). Pick'em games (`0`) have no favorite, so they fall back to the home team. The rule is written down so it's not a hidden choice.
+
+### `accuracy`, `coefficient_table`, `results_markdown`, `main`
+
+- `accuracy`: `(predicted == actual).mean()`, the fraction correct (True=1, False=0 again).
+- `coefficient_table`: pulls the weights out of the pipeline (`named_steps["logisticregression"].coef_`) and sorts them by size.
+- `results_markdown`: builds the table as text so the exact same results go to the screen and to `results.md`.
+- `main` also reports **training accuracy**. If it were much higher than test accuracy, the model would be memorizing (overfitting). 62.6% vs 59.4% is a small gap.
+
+### Results (2025 regular season, 271 games, ties excluded)
+
+| Method | Correct | Accuracy |
+|---|---|---|
+| Always pick home team | 146/271 | 53.9% |
+| Logistic regression | 161/271 | 59.4% |
+| Vegas favorite | 177/271 | 65.3% |
+
+**How to read this honestly:**
+- The model beats "always home" by 5.5 points: it learned something real from recent form.
+- **Vegas wins by about 6 points.** That's expected. The betting line includes injuries, quarterback changes, weather, matchups and huge amounts of money pushing it toward accuracy. Our model knows only 5 numbers about recent results. Beating Vegas is famously hard. Getting *closer* is the realistic goal.
+- **One season is a small test.** With 271 games, accuracy has a margin of error of roughly ±6 percentage points (95% confidence: `1.96 × sqrt(0.59 × 0.41 / 271)` ≈ 0.059). The model-vs-home gap is suggestive, not proven. Testing on more seasons (e.g. train on 2011–2017, test on 2018, and so on, called *walk-forward validation*) would give a firmer answer.
+- **Coefficients:** recent scoring difference (+0.35) and win % difference (+0.27) matter most. Points allowed is negative (allowing more points hurts), as it should be. Rest and division games barely matter in this data.
+
+**Beginner mistakes:**
+- Testing on the training data and reporting that number (62.6% here, which flatters the model).
+- Fitting the scaler on all data before splitting.
+- Shuffling seasons randomly into train and test.
+- Reporting accuracy with no baseline. "59% accurate" sounds bad until you know home teams win only 54%.
+- Feeding `spread_line` into the model and then claiming it "learned" football. It would mostly be copying Vegas. (It's a fine feature if you say clearly that's what you did.)
