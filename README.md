@@ -61,6 +61,16 @@ python tests/test_features.py   # Stage 3: data leakage checks
 python src/model.py             # Stage 4: trains the model, writes results.md
 ```
 
+Web API (FastAPI + SQLite):
+
+```sh
+python pipeline/build_db.py              # build data/nfl.db (re-run after updating games.csv)
+uvicorn backend.app.main:app --reload    # serve the API; docs at http://localhost:8000/docs
+python -m pytest                         # all tests (features + API)
+```
+
+Endpoints: `GET /predictions?week=N[&season=YYYY]`, `GET /teams/{abbr}[?season=YYYY]`, `GET /model/accuracy`, `GET /health`.
+
 ## Project structure
 
 ```

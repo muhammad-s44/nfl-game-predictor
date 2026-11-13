@@ -221,3 +221,6 @@ __marimo__/
 
 # Rebuild exercise attempts (docs/REBUILD.md)
 practice/
+
+# SQLite database built by pipeline/build_db.py
+data/nfl.db
