@@ -14,11 +14,14 @@ import pandas as pd
 # Let this file import from src/ even though it lives in tests/
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "src"))
 
-from analysis import DATA_PATH, load_games_df  # noqa: E402
+from analysis import DATA_PATH, load_games_df, load_schedule_df  # noqa: E402
 from features import FEATURE_COLUMNS, FRANCHISE, build_features  # noqa: E402
 
-GAMES = load_games_df(DATA_PATH)
+GAMES = load_games_df(DATA_PATH)            # played games only
+SCHEDULE = load_schedule_df(DATA_PATH)      # played + upcoming games
 FEATURES = build_features(GAMES)
+SCHEDULE_FEATURES = build_features(SCHEDULE)
+UNPLAYED = SCHEDULE_FEATURES["home_score"].isna()
 
 
 def scramble_from(df, cutoff, seed=0):
@@ -98,10 +101,40 @@ def test_week_one_win_pct_is_neutral():
     assert (week1["away_win_pct"] == 0.5).all()
 
 
+def test_unplayed_games_do_not_change_played_features():
+    """Adding the upcoming schedule must not move any played game's features.
+
+    An unplayed game has no score, so it is not part of any team's history.
+    """
+    assert UNPLAYED.sum() > 0, "no unplayed games in the data to test with"
+    played = SCHEDULE_FEATURES[~UNPLAYED].set_index("game_id")
+    expected = FEATURES.set_index("game_id").loc[played.index]
+    pd.testing.assert_frame_equal(played[FEATURE_COLUMNS], expected[FEATURE_COLUMNS],
+                                  check_dtype=False)
+
+
+def test_unplayed_games_use_only_played_history():
+    """Each upcoming game's features come from played games only.
+
+    A game two weeks away must not count next week's (unplayed) game as a
+    loss, or as a game played, or as one of the "last 3" games.
+    """
+    upcoming = SCHEDULE_FEATURES[UNPLAYED]
+    for _, game in upcoming.iterrows():
+        for side in ("home", "away"):
+            team = FRANCHISE.get(game[f"{side}_team"], game[f"{side}_team"])
+            pf, pa, win_pct = slow_team_features(team, game["gameday"], game["season"])
+            assert np.isclose(game[f"{side}_pf_last3"], pf), game["game_id"]
+            assert np.isclose(game[f"{side}_pa_last3"], pa), game["game_id"]
+            assert np.isclose(game[f"{side}_win_pct"], win_pct), game["game_id"]
+
+
 if __name__ == "__main__":
     tests = [test_future_results_do_not_change_features,
              test_features_match_slow_recomputation,
-             test_week_one_win_pct_is_neutral]
+             test_week_one_win_pct_is_neutral,
+             test_unplayed_games_do_not_change_played_features,
+             test_unplayed_games_use_only_played_history]
     for test in tests:
         test()
         print(f"PASS {test.__name__}")

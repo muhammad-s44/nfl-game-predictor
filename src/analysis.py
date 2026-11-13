@@ -25,6 +25,15 @@ def load_games_df(path):
     return df
 
 
+def load_schedule_df(path):
+    """Read every game in the CSV, including ones not played yet.
+
+    Unplayed games keep NaN scores (so score columns stay float). Use this
+    when you need to predict upcoming games; use load_games_df for analysis.
+    """
+    return pd.read_csv(path)
+
+
 def filter_season(df, season=None):
     """Return rows for one season, or the whole DataFrame if season is None."""
     if season is None:

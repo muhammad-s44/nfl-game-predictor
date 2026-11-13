@@ -49,9 +49,13 @@ def team_game_rows(df):
 
 
 def win_credit(points_for, points_against):
-    """1 for a win, 0.5 for a tie, 0 for a loss (the NFL's standings rule)."""
+    """1 for a win, 0.5 for a tie, 0 for a loss (the NFL's standings rule).
+
+    An unplayed game (NaN score) gets NaN: it is neither a win nor a loss.
+    """
     credit = (points_for > points_against).astype(float)
     credit[points_for == points_against] = 0.5
+    credit[points_for.isna() | points_against.isna()] = float("nan")
     return credit
 
 
@@ -60,24 +64,35 @@ def add_team_history(rows):
 
     The key trick is shift(1): it moves every value down one row within a
     team, so a game only ever sees the games BEFORE it, never itself.
+
+    Rows may include unplayed games (NaN scores). Those get features, so we
+    can predict them, but they never count as part of a team's history.
     """
     rows = rows.sort_values(["team", "gameday", "game_id"]).copy()
-    by_team = rows.groupby("team")
+    played = rows["points_for"].notna() & rows["points_against"].notna()
 
-    # Average of the previous 3 games (fewer if the team has fewer so far).
+    # Average of the previous 3 PLAYED games (fewer if the team has fewer).
     # Rolls across seasons, so week 1 uses the end of last season.
+    # Step 1: on played rows only, the average of the last 3 games up to and
+    #         including this one ("the team's form after this game").
+    # Step 2: shift(1) so each game sees the form after the game before it,
+    #         then ffill so a game two weeks out reuses the latest played form
+    #         instead of skipping over next week's unplayed game.
     for col, new in [("points_for", "pf_last3"), ("points_against", "pa_last3")]:
-        rows[new] = by_team[col].transform(
-            lambda s: s.shift(1).rolling(3, min_periods=1).mean())
+        form_after = (rows[played].groupby("team")[col]
+                      .transform(lambda s: s.rolling(3, min_periods=1).mean()))
+        rows[new] = form_after.reindex(rows.index)
+        rows[new] = rows.groupby("team")[new].transform(lambda s: s.shift(1).ffill())
 
-    # Season win % so far: wins and games BEFORE this one, this season only
-    rows["credit"] = win_credit(rows["points_for"], rows["points_against"])
-    by_team_season = rows.groupby(["team", "season"])
-    prior_wins = by_team_season["credit"].cumsum() - rows["credit"]
-    prior_games = by_team_season.cumcount()  # 0 for the first game, 1 next...
+    # Season win % so far: PLAYED games before this one, this season only
+    credit = win_credit(rows["points_for"], rows["points_against"]).fillna(0)
+    is_played = played.astype(int)
+    by_team_season = rows.assign(credit=credit, is_played=is_played).groupby(["team", "season"])
+    prior_wins = by_team_season["credit"].cumsum() - credit
+    prior_games = by_team_season["is_played"].cumsum() - is_played
     # Before a team's first game there is no record; 0.5 = "average team"
     rows["win_pct"] = (prior_wins / prior_games).where(prior_games > 0, 0.5)
-    return rows.drop(columns="credit")
+    return rows
 
 
 def build_features(df):
