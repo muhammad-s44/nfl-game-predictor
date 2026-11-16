@@ -21,7 +21,9 @@ export default function TeamPage({ params, searchParams }: PageProps<"/teams/[ab
 
 async function TeamContent({ params, searchParams }: PageProps<"/teams/[abbr]">) {
   const { abbr } = await params;
-  const season = Number((await searchParams).season) || undefined;
+  // Whole numbers only; anything else falls back to the team's latest season
+  const rawSeason = Number((await searchParams).season);
+  const season = Number.isInteger(rawSeason) && rawSeason > 0 ? rawSeason : undefined;
   const team = await getTeam(abbr, season);
   if (!team) notFound();
 
@@ -61,9 +63,9 @@ async function TeamContent({ params, searchParams }: PageProps<"/teams/[abbr]">)
 
       <section aria-label="Season stats" className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         <StatTile label="Record" value={record(s.wins, s.losses, s.ties)} note={`${s.games} games played`} highlight />
-        <StatTile label="Points per game" value={s.avg_points_for.toFixed(1)} note={`${s.points_for} total`} />
-        <StatTile label="Allowed per game" value={s.avg_points_against.toFixed(1)} note={`${s.points_against} total`} />
-        <StatTile
+        <StatTile delay={70} label="Points per game" value={s.avg_points_for.toFixed(1)} note={`${s.points_for} total`} />
+        <StatTile delay={140} label="Allowed per game" value={s.avg_points_against.toFixed(1)} note={`${s.points_against} total`} />
+        <StatTile delay={210}
           label="Point diff"
           value={signed(s.point_diff)}
           note={`Home ${record(s.home_wins, s.home_losses)} · Away ${record(s.away_wins, s.away_losses)}`}

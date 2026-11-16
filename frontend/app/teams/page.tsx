@@ -4,7 +4,7 @@ import type { Metadata } from "next";
 import { getTeams } from "@/lib/api";
 import { record } from "@/lib/format";
 import type { TeamSummary } from "@/lib/types";
-import { Card, Eyebrow, Headline, Skeleton, TeamSwatch } from "@/components/ui";
+import { Card, Eyebrow, Headline, Skeleton, stagger, TeamSwatch } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Teams" };
 
@@ -33,8 +33,8 @@ async function TeamsGrid() {
     <div className="flex flex-col gap-8">
       <Eyebrow>{data.season} regular-season records</Eyebrow>
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        {[...divisions].map(([division, teams]) => (
-          <Card key={division} className="p-5">
+        {[...divisions].map(([division, teams], i) => (
+          <Card key={division} className="p-5" delay={stagger(i)}>
             <Eyebrow className="mb-4">{division}</Eyebrow>
             <ul className="flex flex-col">
               {teams.map((t) => (

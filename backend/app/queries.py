@@ -56,8 +56,16 @@ WHERE g.season = ? AND g.home_score IS NULL
 """
 
 
+# The date of the newest game with a score: tells the UI how fresh the data is.
+RESULTS_THROUGH = "SELECT MAX(gameday) FROM games WHERE home_score IS NOT NULL"
+
+
 def latest_predicted_season(conn):
     return conn.execute(LATEST_PREDICTED_SEASON).fetchone()[0]
+
+
+def results_through(conn):
+    return conn.execute(RESULTS_THROUGH).fetchone()[0]
 
 
 def predicted_weeks(conn, season):

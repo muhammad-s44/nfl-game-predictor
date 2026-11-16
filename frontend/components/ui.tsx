@@ -1,12 +1,30 @@
 import type { ReactNode } from "react";
 import { teamColors } from "@/lib/teams";
+import { CountUp } from "./motion/CountUp";
+import { Reveal } from "./motion/Reveal";
 
-/** A floating card: the basic surface every block of data sits on. */
-export function Card({ children, className = "" }: { children: ReactNode; className?: string }) {
+/**
+ * A floating card: the basic surface every block of data sits on.
+ * It fades in on scroll; `delay` staggers neighbouring cards slightly.
+ */
+export function Card({
+  children,
+  className = "",
+  delay = 0,
+}: {
+  children: ReactNode;
+  className?: string;
+  delay?: number;
+}) {
   return (
-    <div className={`rounded-3xl bg-card shadow-float ring-1 ring-line ${className}`}>{children}</div>
+    <Reveal delay={delay} className={`rounded-3xl bg-card shadow-float ring-1 ring-line ${className}`}>
+      {children}
+    </Reveal>
   );
 }
+
+/** Stagger for the n-th card in a grid: 70ms apart, capped so late cards don't lag. */
+export const stagger = (index: number) => Math.min(index % 6, 5) * 70;
 
 /** Small uppercase label above headlines and inside cards. */
 export function Eyebrow({ children, className = "" }: { children: ReactNode; className?: string }) {
@@ -44,19 +62,21 @@ export function StatTile({
   value,
   note,
   highlight = false,
+  delay = 0,
 }: {
   label: string;
   value: string;
   note?: string;
   highlight?: boolean;
+  delay?: number;
 }) {
   return (
-    <Card className="p-4 sm:p-6">
+    <Card className="p-4 sm:p-6" delay={delay}>
       <p className="text-[10px] font-medium uppercase tracking-[0.12em] text-fg-3 sm:text-xs sm:tracking-[0.18em]">
         {label}
       </p>
       <p className={`mt-3 font-serif text-3xl leading-none sm:text-5xl ${highlight ? "text-accent" : "text-fg"}`}>
-        {value}
+        <CountUp text={value} />
       </p>
       {note && <p className="mt-2 text-xs text-fg-3 sm:text-sm">{note}</p>}
     </Card>

@@ -53,6 +53,36 @@ body {
   font-family: var(--font-sans);
 }
 
+/*
+ * Motion. Only when JavaScript runs (scripting: enabled), so content never
+ * stays hidden if the script fails, and only when the user hasn't asked for
+ * reduced motion. Reveal.tsx adds .is-visible when a card scrolls into view.
+ * Only opacity and transform change: the browser can animate those on the
+ * GPU without re-laying-out the page, which keeps it smooth.
+ */
+@media (scripting: enabled) and (prefers-reduced-motion: no-preference) {
+  .reveal {
+    opacity: 0;
+    transform: translateY(16px);
+    transition:
+      opacity 600ms cubic-bezier(0.2, 0.7, 0.2, 1),
+      transform 600ms cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .reveal.is-visible {
+    opacity: 1;
+    transform: none;
+  }
+
+  /* Probability bars grow from 0 once their card is visible */
+  .reveal .grow-x {
+    transform: scaleX(0);
+    transition: transform 900ms cubic-bezier(0.2, 0.7, 0.2, 1) 200ms;
+  }
+  .reveal.is-visible .grow-x {
+    transform: scaleX(1);
+  }
+}
+
 /* Horizontal pill row (week picker) without a visible scrollbar */
 .no-scrollbar {
   scrollbar-width: none;

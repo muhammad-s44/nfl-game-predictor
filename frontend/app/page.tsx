@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { notFound } from "next/navigation";
 import { getAccuracy, getPredictions } from "@/lib/api";
-import { pct } from "@/lib/format";
+import { gameDate, pct } from "@/lib/format";
 import { GameCard } from "@/components/GameCard";
 import { WeekPicker } from "@/components/WeekPicker";
 import { Eyebrow, Headline, Skeleton, StatTile } from "@/components/ui";
@@ -30,9 +30,15 @@ export default function Home({ searchParams }: PageProps<"/">) {
 
 async function WeekContent({ searchParams }: Pick<PageProps<"/">, "searchParams">) {
   const params = await searchParams;
-  const week = Number(params.week) || undefined; // missing or junk -> current week
+  const week = parseWeek(params.week);
   const [predictions, accuracy] = await Promise.all([getPredictions(week), getAccuracy()]);
   if (!predictions) notFound();
+
+  // Today's date, to spot games whose day has passed but whose result isn't
+  // in the data yet (the CSV hasn't been refreshed). Read after the API calls,
+  // so it's part of the request-time render, not the prerendered shell.
+  const today = new Date().toISOString().slice(0, 10);
+  const awaiting = predictions.games.filter((g) => g.status === "scheduled" && g.gameday < today);
 
   const thisSeason = accuracy.find((s) => s.season === predictions.season);
   const byMethod = (name: string) => thisSeason?.methods.find((m) => m.method === name);
@@ -50,8 +56,8 @@ async function WeekContent({ searchParams }: Pick<PageProps<"/">, "searchParams"
             note={`${model.correct} of ${thisSeason.games} games right`}
             highlight
           />
-          <StatTile label="Vegas favorite" value={pct(vegas.accuracy)} note={`${vegas.correct} of ${thisSeason.games}`} />
-          <StatTile label="Always pick home" value={pct(home.accuracy)} note={`${home.correct} of ${thisSeason.games}`} />
+          <StatTile delay={70} label="Vegas favorite" value={pct(vegas.accuracy)} note={`${vegas.correct} of ${thisSeason.games}`} />
+          <StatTile delay={140} label="Always pick home" value={pct(home.accuracy)} note={`${home.correct} of ${thisSeason.games}`} />
         </section>
       )}
 
@@ -61,15 +67,28 @@ async function WeekContent({ searchParams }: Pick<PageProps<"/">, "searchParams"
             {predictions.season} season · Week {predictions.week} · {predictions.games.length} games
           </Eyebrow>
           <WeekPicker weeks={predictions.weeks} current={predictions.week} />
+          {awaiting.length > 0 && predictions.results_through && (
+            <p className="rounded-2xl bg-card px-4 py-3 text-sm text-fg-2 ring-1 ring-line">
+              Results are loaded through {gameDate(predictions.results_through)}. {awaiting.length} game
+              {awaiting.length === 1 ? " has" : "s have"} been played since; rebuild the data to score{" "}
+              {awaiting.length === 1 ? "it" : "them"}.
+            </p>
+          )}
         </div>
         <div className="grid grid-cols-1 gap-4 md:grid-cols-2 lg:grid-cols-3">
-          {predictions.games.map((g) => (
-            <GameCard key={g.game_id} game={g} />
+          {predictions.games.map((g, i) => (
+            <GameCard key={g.game_id} game={g} index={i} awaitingResult={awaiting.includes(g)} />
           ))}
         </div>
       </section>
     </div>
   );
+}
+
+/** "?week=7" -> 7. Anything that isn't a whole number from 1 to 18 -> undefined (= current week). */
+function parseWeek(raw: string | string[] | undefined) {
+  const week = Number(raw);
+  return Number.isInteger(week) && week >= 1 && week <= 18 ? week : undefined;
 }
 
 function WeekSkeleton() {

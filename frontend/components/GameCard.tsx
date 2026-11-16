@@ -1,19 +1,27 @@
 import Link from "next/link";
 import type { GamePrediction } from "@/lib/types";
 import { gameDate, pct, vegasLine } from "@/lib/format";
-import { Card, TeamSwatch } from "./ui";
+import { Card, stagger, TeamSwatch } from "./ui";
 
 /** One game: both teams, the model's win probabilities, the Vegas line, and the result if played. */
-export function GameCard({ game }: { game: GamePrediction }) {
+export function GameCard({
+  game,
+  index = 0,
+  awaitingResult = false,
+}: {
+  game: GamePrediction;
+  index?: number;
+  awaitingResult?: boolean; // the game's date has passed but its score isn't loaded
+}) {
   const homeProb = game.home_win_prob;
   const awayProb = 1 - homeProb;
   const final = game.status === "final";
 
   return (
-    <Card className="flex flex-col gap-5 p-5 sm:p-6">
+    <Card className="flex flex-col gap-5 p-5 sm:p-6" delay={stagger(index)}>
       <div className="flex items-center justify-between gap-3 text-xs">
         <span className="uppercase tracking-[0.18em] text-fg-3">{gameDate(game.gameday)}</span>
-        <StatusBadge game={game} />
+        <StatusBadge game={game} awaitingResult={awaitingResult} />
       </div>
 
       <div className="flex flex-col gap-3">
@@ -83,7 +91,9 @@ function TeamRow({
 
 /**
  * A split bar: away share on the left, home share on the right, with a 2px
- * gap between them. The model's pick is the bright side.
+ * gap between them. The model's pick is the bright side. When the card
+ * scrolls in, each side grows from its outer edge toward the middle
+ * (.grow-x in globals.css; origin-left / origin-right set where it grows from).
  */
 function ProbabilityBar({ game }: { game: GamePrediction }) {
   const home = game.home_win_prob;
@@ -95,19 +105,20 @@ function ProbabilityBar({ game }: { game: GamePrediction }) {
       className="flex h-2 w-full gap-[2px]"
     >
       <div
-        className={`h-full rounded-l-full ${homePicked ? "bg-fg/15" : "bg-accent"}`}
+        className={`grow-x h-full origin-left rounded-l-full ${homePicked ? "bg-fg/15" : "bg-accent"}`}
         style={{ width: `${(1 - home) * 100}%` }}
       />
       <div
-        className={`h-full rounded-r-full ${homePicked ? "bg-accent" : "bg-fg/15"}`}
+        className={`grow-x h-full origin-right rounded-r-full ${homePicked ? "bg-accent" : "bg-fg/15"}`}
         style={{ width: `${home * 100}%` }}
       />
     </div>
   );
 }
 
-function StatusBadge({ game }: { game: GamePrediction }) {
-  if (game.status === "scheduled") return <span className="text-fg-3">Upcoming</span>;
+function StatusBadge({ game, awaitingResult }: { game: GamePrediction; awaitingResult: boolean }) {
+  if (game.status === "scheduled")
+    return <span className="text-fg-3">{awaitingResult ? "Awaiting result" : "Upcoming"}</span>;
   if (game.correct === null) return <span className="text-fg-3">Final · Tie</span>;
   return game.correct ? (
     <span className="rounded-full bg-accent/15 px-2.5 py-1 font-medium text-accent">✓ Called it</span>

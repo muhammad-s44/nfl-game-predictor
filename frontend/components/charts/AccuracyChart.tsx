@@ -14,6 +14,7 @@ import {
 } from "recharts";
 import type { SeasonAccuracy } from "@/lib/types";
 import { pct } from "@/lib/format";
+import { useInView } from "@/lib/useInView";
 import { ChartLegend, TooltipBox, VIZ } from "./ChartLegend";
 
 // Fixed order and colour per method. The colour follows the method, so a
@@ -27,6 +28,7 @@ const SERIES = [
 type Row = { season: string; games: number } & Record<string, number | string>;
 
 export function AccuracyChart({ seasons }: { seasons: SeasonAccuracy[] }) {
+  const [ref, inView] = useInView<HTMLDivElement>();
   const data: Row[] = seasons.map((s) => {
     const row: Row = {
       season: s.games_remaining ? `${s.season} (so far)` : String(s.season),
@@ -42,7 +44,9 @@ export function AccuracyChart({ seasons }: { seasons: SeasonAccuracy[] }) {
   return (
     <div className="flex flex-col gap-4">
       <ChartLegend items={SERIES.map((s) => ({ label: s.short, color: s.color }))} />
-      <div className="h-80 w-full">
+      {/* Mount the chart only once it scrolls into view (see PointsChart). */}
+      <div ref={ref} className="h-80 w-full">
+        {inView && (
         <ResponsiveContainer width="100%" height="100%">
           <BarChart data={data} margin={{ top: 24, right: 8, bottom: 4, left: -16 }} barGap={2} barCategoryGap="24%">
             <CartesianGrid vertical={false} stroke={VIZ.grid} />
@@ -67,7 +71,9 @@ export function AccuracyChart({ seasons }: { seasons: SeasonAccuracy[] }) {
               content={(props: TooltipContentProps) => <AccuracyTooltip {...props} />}
             />
             {SERIES.map((s) => (
-              <Bar key={s.key} dataKey={s.key} name={s.short} fill={s.color} radius={[4, 4, 0, 0]} isAnimationActive={false}>
+              <Bar key={s.key} dataKey={s.key} name={s.short} fill={s.color} radius={[4, 4, 0, 0]} isAnimationActive="auto"
+                animationDuration={900}
+                animationEasing="ease-out">
                 <LabelList
                   dataKey={s.key}
                   position="top"
@@ -79,6 +85,7 @@ export function AccuracyChart({ seasons }: { seasons: SeasonAccuracy[] }) {
             ))}
           </BarChart>
         </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

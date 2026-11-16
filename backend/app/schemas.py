@@ -33,6 +33,7 @@ class PredictionsResponse(BaseModel):
     season: int
     week: int
     weeks: list[int]              # every predicted week this season, for a week picker
+    results_through: str | None   # date of the newest scored game in the data
     games: list[GamePrediction]
 
 

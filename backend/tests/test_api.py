@@ -82,6 +82,11 @@ def test_predictions_default_to_current_week(client, csv):
     assert body["weeks"] == list(range(1, 19))
 
 
+def test_predictions_report_data_freshness(client, csv):
+    body = client.get("/predictions").json()
+    assert body["results_through"] == csv[csv["home_score"].notna()]["gameday"].max()
+
+
 def test_finished_season_defaults_to_last_week(client):
     body = client.get("/predictions", params={"season": 2025}).json()
     assert body["week"] == 18
@@ -137,6 +142,8 @@ def test_list_teams(client, csv):
     assert (kc["wins"], kc["losses"]) == (wins, losses)
     # Default season = latest season with results
     assert client.get("/teams").json()["season"] == csv[csv["home_score"].notna()]["season"].max()
+    # A season with no results is a 404, not 32 teams at 0-0
+    assert client.get("/teams", params={"season": 1990}).status_code == 404
 
 
 def test_relocated_team_history_is_under_current_code(client):

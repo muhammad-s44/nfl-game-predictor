@@ -15,11 +15,13 @@ import {
   type TooltipContentProps,
 } from "recharts";
 import type { SeasonGame } from "@/lib/types";
+import { useInView } from "@/lib/useInView";
 import { ChartLegend, TooltipBox, VIZ } from "./ChartLegend";
 
 type Point = SeasonGame;
 
 export function PointsChart({ games }: { games: SeasonGame[] }) {
+  const [ref, inView] = useInView<HTMLDivElement>();
   const data: Point[] = games;
   const last = data.length - 1;
 
@@ -49,7 +51,10 @@ export function PointsChart({ games }: { games: SeasonGame[] }) {
           { label: "Points allowed", color: VIZ.vegas },
         ]}
       />
-      <div className="h-72 w-full sm:h-80">
+      {/* Mount the chart only once it scrolls into view, so its draw-in
+          animation plays where the reader can see it. The div keeps its height. */}
+      <div ref={ref} className="h-72 w-full sm:h-80">
+        {inView && (
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 12, right: 64, bottom: 4, left: -16 }}>
             <CartesianGrid vertical={false} stroke={VIZ.grid} />
@@ -91,13 +96,16 @@ export function PointsChart({ games }: { games: SeasonGame[] }) {
                 strokeWidth={2}
                 dot={{ r: 4, fill: color, stroke: VIZ.surface, strokeWidth: 2 }}
                 activeDot={{ r: 6, fill: color, stroke: VIZ.surface, strokeWidth: 2 }}
-                isAnimationActive={false}
+                isAnimationActive="auto"
+                animationDuration={900}
+                animationEasing="ease-out"
               >
                 <LabelList dataKey={key} content={endLabel(name, key === "points_for")} />
               </Line>
             ))}
           </LineChart>
         </ResponsiveContainer>
+        )}
       </div>
     </div>
   );

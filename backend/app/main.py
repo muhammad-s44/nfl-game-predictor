@@ -55,7 +55,8 @@ def get_predictions(
     if not games:
         raise HTTPException(404, f"No predictions for season {season}, week {week}")
     return {"season": season, "week": week,
-            "weeks": queries.predicted_weeks(conn, season), "games": games}
+            "weeks": queries.predicted_weeks(conn, season),
+            "results_through": queries.results_through(conn), "games": games}
 
 
 @app.get("/teams", response_model=TeamsResponse)
@@ -66,7 +67,11 @@ def list_teams(
     """All 32 teams with their regular-season record."""
     if season is None:
         season = queries.latest_played_season_any_team(conn)
-    return {"season": season, "teams": queries.all_teams(conn, season)}
+    teams = queries.all_teams(conn, season)
+    # A season with no results at all (1990, 2030) is "not found", not 32 teams at 0-0
+    if not any(t["wins"] + t["losses"] + t["ties"] for t in teams):
+        raise HTTPException(404, f"No results for season {season}")
+    return {"season": season, "teams": teams}
 
 
 @app.get("/teams/{abbr}", response_model=TeamResponse)

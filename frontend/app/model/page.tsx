@@ -42,8 +42,8 @@ async function ModelContent() {
       {complete && model && vegas && home && (
         <section aria-label={`${complete.season} results`} className="grid grid-cols-3 gap-2 sm:gap-4">
           <StatTile label={`Model · ${complete.season}`} value={pct(model.accuracy)} note={`${model.correct} of ${complete.games} games`} highlight />
-          <StatTile label="Vegas favorite" value={pct(vegas.accuracy)} note={`${vegas.correct} of ${complete.games}`} />
-          <StatTile label="Always pick home" value={pct(home.accuracy)} note={`${home.correct} of ${complete.games}`} />
+          <StatTile delay={70} label="Vegas favorite" value={pct(vegas.accuracy)} note={`${vegas.correct} of ${complete.games}`} />
+          <StatTile delay={140} label="Always pick home" value={pct(home.accuracy)} note={`${home.correct} of ${complete.games}`} />
         </section>
       )}
 
