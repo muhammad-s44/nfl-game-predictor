@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import { getAccuracy } from "@/lib/api";
 import { pct } from "@/lib/format";
 import { AccuracyChart } from "@/components/charts/AccuracyChart";
+import { SlowNotice } from "@/components/SlowNotice";
 import { Card, Eyebrow, Headline, Skeleton, StatTile } from "@/components/ui";
 
 export const metadata: Metadata = { title: "Model" };
@@ -19,7 +20,14 @@ export default function ModelPage() {
           scored against two simple baselines.
         </p>
       </section>
-      <Suspense fallback={<Skeleton className="h-[36rem]" />}>
+      <Suspense
+        fallback={
+          <div className="flex flex-col gap-6">
+            <SlowNotice />
+            <Skeleton className="h-[36rem]" />
+          </div>
+        }
+      >
         <ModelContent />
       </Suspense>
     </div>

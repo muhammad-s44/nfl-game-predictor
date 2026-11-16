@@ -9,6 +9,13 @@ import type {
 // (server components), not in the browser, so this never reaches users.
 const API_URL = process.env.API_URL ?? "http://127.0.0.1:8000";
 
+// How long to wait for the API before showing the error page. Locally the API
+// answers instantly, so 5 seconds. In production the API runs on Render's free
+// plan, which sleeps after ~15 idle minutes and takes up to about a minute to
+// wake, so wait longer there. Override with the API_TIMEOUT_MS variable.
+const TIMEOUT_MS =
+  Number(process.env.API_TIMEOUT_MS) || (process.env.NODE_ENV === "production" ? 75_000 : 5_000);
+
 export class ApiError extends Error {}
 
 /** GET a JSON endpoint. Returns null for a 404, throws for anything else. */
@@ -20,9 +27,9 @@ async function get<T>(path: string, params: Record<string, string | number | und
 
   let res: Response;
   try {
-    // Give up after 5 seconds, so a hung API shows the error page instead
+    // Give up after TIMEOUT_MS, so a hung API shows the error page instead
     // of leaving the page loading forever.
-    res = await fetch(url, { signal: AbortSignal.timeout(5000) });
+    res = await fetch(url, { signal: AbortSignal.timeout(TIMEOUT_MS) });
   } catch {
     throw new ApiError(`Can't reach the API at ${API_URL}. Is uvicorn running?`);
   }

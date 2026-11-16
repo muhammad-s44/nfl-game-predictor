@@ -5,6 +5,7 @@ import { getTeam } from "@/lib/api";
 import { gameDate, record, signed } from "@/lib/format";
 import { splitTeamName } from "@/lib/teams";
 import { PointsChart } from "@/components/charts/PointsChart";
+import { SlowNotice } from "@/components/SlowNotice";
 import { Card, Eyebrow, Headline, ResultChip, Skeleton, StatTile, TeamSwatch } from "@/components/ui";
 
 // Which seasons the toggle offers. The API has every season back to 1999;
@@ -148,6 +149,7 @@ async function TeamContent({ params, searchParams }: PageProps<"/teams/[abbr]">)
 function TeamSkeleton() {
   return (
     <div className="flex flex-col gap-10 pt-10 sm:pt-16">
+      <SlowNotice />
       <Skeleton className="h-40" />
       <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
         {[0, 1, 2, 3].map((i) => (

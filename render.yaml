@@ -1,0 +1,16 @@
+# Render "Blueprint": tells Render how to run the FastAPI backend.
+# In Render: New > Blueprint > pick this repo. Render reads this file.
+#
+# The SQLite database is NOT in git (data/nfl.db is ignored). The build step
+# recreates it from data/games.csv every deploy, so pushing a new games.csv
+# to GitHub is all it takes to refresh the live predictions.
+services:
+  - type: web
+    name: nfl-predictor-api
+    runtime: python
+    plan: free            # free instances sleep after ~15 idle minutes
+    buildCommand: pip install -r requirements.txt && python pipeline/build_db.py
+    # Render tells the app which port to listen on through $PORT
+    startCommand: uvicorn backend.app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    autoDeploy: true      # redeploy on every push to main

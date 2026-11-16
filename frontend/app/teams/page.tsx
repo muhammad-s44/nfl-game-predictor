@@ -3,6 +3,7 @@ import Link from "next/link";
 import type { Metadata } from "next";
 import { getTeams } from "@/lib/api";
 import { record } from "@/lib/format";
+import { SlowNotice } from "@/components/SlowNotice";
 import type { TeamSummary } from "@/lib/types";
 import { Card, Eyebrow, Headline, Skeleton, stagger, TeamSwatch } from "@/components/ui";
 
@@ -12,7 +13,14 @@ export default function TeamsPage() {
   return (
     <div className="flex flex-col gap-12 pt-10 sm:pt-20">
       <Headline before="All" accent="thirty-two" after=" teams." />
-      <Suspense fallback={<Skeleton className="h-[40rem]" />}>
+      <Suspense
+        fallback={
+          <div className="flex flex-col gap-6">
+            <SlowNotice />
+            <Skeleton className="h-[40rem]" />
+          </div>
+        }
+      >
         <TeamsGrid />
       </Suspense>
     </div>

@@ -4,6 +4,7 @@ import { getAccuracy, getPredictions } from "@/lib/api";
 import { gameDate, pct } from "@/lib/format";
 import { GameCard } from "@/components/GameCard";
 import { WeekPicker } from "@/components/WeekPicker";
+import { SlowNotice } from "@/components/SlowNotice";
 import { Eyebrow, Headline, Skeleton, StatTile } from "@/components/ui";
 
 // The page itself is static: the headline is part of the prerendered shell
@@ -94,6 +95,7 @@ function parseWeek(raw: string | string[] | undefined) {
 function WeekSkeleton() {
   return (
     <div className="flex flex-col gap-10">
+      <SlowNotice />
       <div className="grid grid-cols-3 gap-2 sm:gap-4">
         {[0, 1, 2].map((i) => (
           <Skeleton key={i} className="h-36" />
