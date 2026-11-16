@@ -2,6 +2,8 @@
 
 Predicting NFL game winners with Python, pandas and scikit-learn, using [nflverse](https://github.com/nflverse) game data from 1999 to today.
 
+**Live site: [nfl-game-predictor-self.vercel.app](https://nfl-game-predictor-self.vercel.app)** (Next.js on Vercel), backed by a FastAPI + SQLite API on Render ([`/model/accuracy`](https://nfl-predictor-api-z7y4.onrender.com/model/accuracy)). The API is on Render's free plan, so the first visit after a quiet spell can take up to a minute while it wakes.
+
 The project is built in four stages, one git commit each: plain-Python exploration, pandas analysis, charts plus leakage-safe features, and a logistic regression model compared against two baselines.
 
 ## Results
