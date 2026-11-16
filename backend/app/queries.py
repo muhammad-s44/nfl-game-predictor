@@ -40,8 +40,36 @@ ORDER BY g.gameday, g.game_id
 """
 
 
+PREDICTED_WEEKS = """
+SELECT DISTINCT g.week
+FROM games AS g JOIN predictions AS p ON p.game_id = g.game_id
+WHERE g.season = ?
+ORDER BY g.week
+"""
+
+# "This week" = the earliest week that still has an unplayed game.
+# MIN() over zero rows gives NULL, which means the season is finished.
+CURRENT_WEEK = """
+SELECT MIN(g.week)
+FROM games AS g JOIN predictions AS p ON p.game_id = g.game_id
+WHERE g.season = ? AND g.home_score IS NULL
+"""
+
+
 def latest_predicted_season(conn):
     return conn.execute(LATEST_PREDICTED_SEASON).fetchone()[0]
+
+
+def predicted_weeks(conn, season):
+    return [row[0] for row in conn.execute(PREDICTED_WEEKS, (season,)).fetchall()]
+
+
+def current_week(conn, season):
+    week = conn.execute(CURRENT_WEEK, (season,)).fetchone()[0]
+    if week is None:  # every game played: show the last week
+        weeks = predicted_weeks(conn, season)
+        week = weeks[-1] if weeks else None
+    return week
 
 
 def predictions_for_week(conn, season, week):
@@ -95,6 +123,53 @@ WHERE team = ? AND season <= ? AND points_for IS NOT NULL
 ORDER BY gameday DESC
 LIMIT ?
 """
+
+
+# Every regular-season game a team played in one season, in week order.
+# Feeds the points-per-game chart.
+SEASON_GAMES = """
+SELECT week, gameday, opponent,
+       CASE WHEN is_home = 1 THEN 'home' ELSE 'away' END AS home_away,
+       points_for, points_against,
+       CASE WHEN points_for > points_against THEN 'W'
+            WHEN points_for < points_against THEN 'L'
+            ELSE 'T'
+       END AS result
+FROM team_games
+WHERE team = ? AND season = ? AND game_type = 'REG' AND points_for IS NOT NULL
+ORDER BY week
+"""
+
+# All 32 teams with their record in one season. LEFT JOIN keeps a team even
+# if it has no played games yet (its counts come out as 0 via COALESCE).
+ALL_TEAMS = """
+SELECT t.abbr, t.name, t.conference, t.division,
+       COALESCE(SUM(tg.points_for > tg.points_against), 0) AS wins,
+       COALESCE(SUM(tg.points_for < tg.points_against), 0) AS losses,
+       COALESCE(SUM(tg.points_for = tg.points_against), 0) AS ties
+FROM teams AS t
+LEFT JOIN team_games AS tg
+       ON tg.team = t.abbr
+      AND tg.season = ?
+      AND tg.game_type = 'REG'
+      AND tg.points_for IS NOT NULL
+GROUP BY t.abbr
+ORDER BY t.conference, t.division, t.name
+"""
+
+LATEST_PLAYED_SEASON_ANY_TEAM = "SELECT MAX(season) FROM games WHERE home_score IS NOT NULL"
+
+
+def season_games(conn, abbr, season):
+    return [dict(row) for row in conn.execute(SEASON_GAMES, (abbr, season)).fetchall()]
+
+
+def all_teams(conn, season):
+    return [dict(row) for row in conn.execute(ALL_TEAMS, (season,)).fetchall()]
+
+
+def latest_played_season_any_team(conn):
+    return conn.execute(LATEST_PLAYED_SEASON_ANY_TEAM).fetchone()[0]
 
 
 def team_by_abbr(conn, abbr):

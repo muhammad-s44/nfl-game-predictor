@@ -32,6 +32,7 @@ class GamePrediction(BaseModel):
 class PredictionsResponse(BaseModel):
     season: int
     week: int
+    weeks: list[int]              # every predicted week this season, for a week picker
     games: list[GamePrediction]
 
 
@@ -74,13 +75,39 @@ class RecentForm(BaseModel):
     avg_point_diff: float
 
 
+class SeasonGame(BaseModel):
+    week: int
+    gameday: str
+    opponent: str
+    home_away: Literal["home", "away"]
+    points_for: int
+    points_against: int
+    result: Literal["W", "L", "T"]
+
+
 class TeamResponse(BaseModel):
     abbr: str
     name: str
     conference: str
     division: str
     season_stats: SeasonStats
+    season_games: list[SeasonGame]   # regular-season games in week order
     recent_form: RecentForm
+
+
+class TeamSummary(BaseModel):
+    abbr: str
+    name: str
+    conference: str
+    division: str
+    wins: int
+    losses: int
+    ties: int
+
+
+class TeamsResponse(BaseModel):
+    season: int
+    teams: list[TeamSummary]
 
 
 # ---------- GET /model/accuracy ----------

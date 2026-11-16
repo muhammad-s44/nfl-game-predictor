@@ -69,7 +69,17 @@ uvicorn backend.app.main:app --reload    # serve the API; docs at http://localho
 python -m pytest                         # all tests (features + API)
 ```
 
-Endpoints: `GET /predictions?week=N[&season=YYYY]`, `GET /teams/{abbr}[?season=YYYY]`, `GET /model/accuracy`, `GET /health`.
+Endpoints: `GET /predictions[?week=N&season=YYYY]` (defaults to the current week), `GET /teams`, `GET /teams/{abbr}[?season=YYYY]`, `GET /model/accuracy`, `GET /health`.
+
+Website (Next.js + Tailwind + Recharts, needs Node.js 20+), with the API running in another terminal:
+
+```sh
+cd frontend
+npm install          # once
+npm run dev          # http://localhost:3000
+```
+
+Pages: `/` (this week's picks), `/teams`, `/teams/{abbr}` (stats + points-per-game chart), `/model` (accuracy vs baselines). The site reads the API from `API_URL` (default `http://127.0.0.1:8000`).
 
 ## Project structure
 

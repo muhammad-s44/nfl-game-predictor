@@ -16,7 +16,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from . import queries
 from .db import get_db
-from .schemas import MethodAccuracy, PredictionsResponse, SeasonAccuracy, TeamResponse
+from .schemas import (MethodAccuracy, PredictionsResponse, SeasonAccuracy, TeamResponse,
+                      TeamsResponse)
 
 app = FastAPI(
     title="NFL Game Predictor API",
@@ -40,17 +41,32 @@ def health():
 
 @app.get("/predictions", response_model=PredictionsResponse)
 def get_predictions(
-    week: int = Query(ge=1, le=18, description="Regular-season week (1-18)"),
+    week: int | None = Query(None, ge=1, le=18,
+                             description="Regular-season week (1-18). Defaults to the current week"),
     season: int | None = Query(None, description="Defaults to the latest predicted season"),
     conn: sqlite3.Connection = Depends(get_db),
 ):
     """Every predicted game in one week, with results for games already played."""
     if season is None:
         season = queries.latest_predicted_season(conn)
-    games = queries.predictions_for_week(conn, season, week)
+    if week is None:
+        week = queries.current_week(conn, season)
+    games = queries.predictions_for_week(conn, season, week) if week else []
     if not games:
         raise HTTPException(404, f"No predictions for season {season}, week {week}")
-    return {"season": season, "week": week, "games": games}
+    return {"season": season, "week": week,
+            "weeks": queries.predicted_weeks(conn, season), "games": games}
+
+
+@app.get("/teams", response_model=TeamsResponse)
+def list_teams(
+    season: int | None = Query(None, description="Defaults to the latest season with results"),
+    conn: sqlite3.Connection = Depends(get_db),
+):
+    """All 32 teams with their regular-season record."""
+    if season is None:
+        season = queries.latest_played_season_any_team(conn)
+    return {"season": season, "teams": queries.all_teams(conn, season)}
 
 
 @app.get("/teams/{abbr}", response_model=TeamResponse)
@@ -79,7 +95,9 @@ def get_team(
         "ties": sum(g["result"] == "T" for g in recent),
         "avg_point_diff": round(sum(diffs) / len(diffs), 1),
     }
-    return {**team, "season_stats": stats, "recent_form": recent_form}
+    return {**team, "season_stats": stats,
+            "season_games": queries.season_games(conn, abbr, season),
+            "recent_form": recent_form}
 
 
 @app.get("/model/accuracy", response_model=list[SeasonAccuracy])

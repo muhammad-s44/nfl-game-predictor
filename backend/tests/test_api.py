@@ -69,9 +69,22 @@ def test_predictions_default_to_latest_season_and_show_unplayed_games(client, cs
 def test_predictions_errors(client):
     assert client.get("/predictions", params={"week": 0}).status_code == 422
     assert client.get("/predictions", params={"week": 19}).status_code == 422
-    assert client.get("/predictions").status_code == 422  # week is required
     # 2010 was never predicted (only 2025 and 2026 are test seasons)
     assert client.get("/predictions", params={"season": 2010, "week": 1}).status_code == 404
+
+
+def test_predictions_default_to_current_week(client, csv):
+    """No week = the earliest week that still has an unplayed game."""
+    body = client.get("/predictions").json()
+    latest = csv[(csv["season"] == csv["season"].max()) & (csv["game_type"] == "REG")]
+    assert body["week"] == latest[latest["home_score"].isna()]["week"].min()
+    assert any(g["status"] == "scheduled" for g in body["games"])
+    assert body["weeks"] == list(range(1, 19))
+
+
+def test_finished_season_defaults_to_last_week(client):
+    body = client.get("/predictions", params={"season": 2025}).json()
+    assert body["week"] == 18
 
 
 # ---------- /teams/{abbr} ----------
@@ -106,6 +119,24 @@ def test_team_recent_form(client):
             "L" if g["points_for"] < g["points_against"] else "T")
         assert g["result"] == expected
     assert form["wins"] + form["losses"] + form["ties"] == 5
+
+
+def test_team_season_games_feed_the_chart(client, csv):
+    body = client.get("/teams/KC", params={"season": 2025}).json()
+    games = body["season_games"]
+    assert len(games) == body["season_stats"]["games"]
+    assert [g["week"] for g in games] == sorted(g["week"] for g in games)
+    assert sum(g["points_for"] for g in games) == body["season_stats"]["points_for"]
+
+
+def test_list_teams(client, csv):
+    body = client.get("/teams", params={"season": 2025}).json()
+    assert len(body["teams"]) == 32
+    kc = next(t for t in body["teams"] if t["abbr"] == "KC")
+    wins, losses, _, _ = pandas_record(csv, "KC", 2025)
+    assert (kc["wins"], kc["losses"]) == (wins, losses)
+    # Default season = latest season with results
+    assert client.get("/teams").json()["season"] == csv[csv["home_score"].notna()]["season"].max()
 
 
 def test_relocated_team_history_is_under_current_code(client):

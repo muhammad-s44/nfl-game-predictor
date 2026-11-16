@@ -1,0 +1,62 @@
+@import "tailwindcss";
+
+/*
+ * Design tokens. Tailwind v4 turns every --color-* here into utilities
+ * (bg-card, text-fg-2, ring-line, ...), so colours are defined once.
+ *
+ * The site is dark-only by design: a near-black background, warm off-white
+ * text in three strengths, and ONE bright accent (lime) for highlights.
+ * Chart series use the --color-viz-* set instead: those were checked with a
+ * colour-blindness validator against the card surface. The bright lime is too
+ * light to sit beside other hues in a chart, so the model's series uses a
+ * deeper step of the same lime.
+ */
+@theme {
+  --color-ink: #0e0f0d;        /* page background */
+  --color-card: #171916;       /* floating cards (also the chart surface) */
+  --color-card-2: #1f221e;     /* raised elements inside cards */
+  --color-line: rgb(237 233 223 / 0.08);
+
+  --color-fg: #ede9df;         /* primary text: muted off-white */
+  --color-fg-2: #b5b0a4;       /* secondary text */
+  --color-fg-3: #8a857a;       /* labels, captions */
+
+  --color-accent: #d4ff3a;     /* the one bright accent */
+  --color-accent-ink: #0e0f0d; /* text on top of the accent */
+
+  --color-viz-model: #7fa516;  /* charts: our model / points scored */
+  --color-viz-vegas: #5f86cc;  /* charts: Vegas / points allowed */
+  --color-viz-home: #d0688a;   /* charts: always-pick-home baseline */
+
+  --font-serif: var(--font-instrument-serif), Georgia, serif;
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+
+  --shadow-float:
+    inset 0 1px 0 0 rgb(255 255 255 / 0.04),
+    0 24px 60px -24px rgb(0 0 0 / 0.75),
+    0 8px 24px -12px rgb(0 0 0 / 0.55);
+}
+
+:root {
+  color-scheme: dark;
+}
+
+body {
+  /* Soft glow at the top of every page, so it isn't a flat black slab.
+     On the body (full width) rather than a wrapper, so it has no visible edge. */
+  background:
+    radial-gradient(900px 600px at 10% -10%, rgb(212 255 58 / 0.07), transparent 70%),
+    radial-gradient(700px 500px at 95% 0%, rgb(95 134 204 / 0.06), transparent 70%),
+    var(--color-ink);
+  background-repeat: no-repeat;
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+}
+
+/* Horizontal pill row (week picker) without a visible scrollbar */
+.no-scrollbar {
+  scrollbar-width: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
+}
